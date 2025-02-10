@@ -9,14 +9,15 @@
 #ifndef INCLUDE_TCPCLIENT_H_
 #define INCLUDE_TCPCLIENT_H_
 
-#include <algorithm>
-#include <cstddef>   // size_t
-#include <cstdlib>
-#include <cstring>   // strerror, strlen, memcpy, strcpy
-#include <ctime>
-#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
+#include <algorithm>
+#include <cstddef>  // size_t
+#include <cstdlib>
+#include <cstring>  // strerror, strlen, memcpy, strcpy
+#include <ctime>
+#include <iostream>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -82,6 +83,8 @@ protected:
 
    struct addrinfo* m_pResultAddrInfo;
    struct addrinfo  m_HintsAddrInfo;
+   std::random_device m_RandDevice{};
+   std::default_random_engine m_Rng;
 };
 
 #endif

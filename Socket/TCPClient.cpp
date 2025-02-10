@@ -5,18 +5,17 @@
 */
 
 #include "TCPClient.h"
+#include <random>
 
-CTCPClient::CTCPClient(const LogFnCallback oLogger,
-                       const SettingsFlag eSettings /*= ALL_FLAGS*/) :
-   ASocket(oLogger, eSettings),
-   m_eStatus(DISCONNECTED),
-   m_pResultAddrInfo(nullptr),
-   m_ConnectSocket(INVALID_SOCKET)
-   //m_uRetryCount(0),
-   //m_uRetryPeriod(0)
-{
-
-}
+CTCPClient::CTCPClient(const LogFnCallback oLogger, const SettingsFlag eSettings /*= ALL_FLAGS*/)
+    : ASocket(oLogger, eSettings),
+      m_eStatus(DISCONNECTED),
+      m_pResultAddrInfo(nullptr),
+      m_ConnectSocket(INVALID_SOCKET),
+      m_Rng(m_RandDevice())
+// m_uRetryCount(0),
+// m_uRetryPeriod(0)
+{}
 
 // Method for setting receive timeout. Can be called after Connect
 bool CTCPClient::SetRcvTimeout(unsigned int msec_timeout) {
@@ -240,31 +239,55 @@ bool CTCPClient::Connect(const std::string& strServer, const std::string& strPor
     * Try each address until we successfully connect(2).
     * If socket(2) (or connect(2)) fails, we (close the socket
     * and) try the next address. */
-   struct addrinfo* pResPtr = m_pResultAddrInfo;
-   for (pResPtr = m_pResultAddrInfo; pResPtr != nullptr; pResPtr = pResPtr->ai_next)
+
+   struct addrinfo* pTmpPtr = m_pResultAddrInfo;
+   size_t uSize = 0;
+   for (pTmpPtr = m_pResultAddrInfo; pTmpPtr != nullptr; pTmpPtr = pTmpPtr->ai_next) 
    {
-      // create socket
-      m_ConnectSocket = socket(pResPtr->ai_family, pResPtr->ai_socktype, pResPtr->ai_protocol);
-      if (m_ConnectSocket < 0) // or == -1
-         continue;
+     ++uSize;
+   }
 
-      // connexion to the server
-      int iConRet = connect(m_ConnectSocket, pResPtr->ai_addr, pResPtr->ai_addrlen);
-      if (iConRet >= 0) // or != -1
-      {
-         /* Success */
-         m_eStatus = CONNECTED;
-         
-         if (m_pResultAddrInfo != nullptr)
-         {
-            freeaddrinfo(m_pResultAddrInfo);
-            m_pResultAddrInfo = nullptr;
-         }
+   std::uniform_int_distribution<size_t> RngGen(0, uSize - 1);
+   size_t uStartIndex = RngGen(m_Rng);
 
-         return true;
-      }
+   if (m_eSettingsFlags & ENABLE_LOG)
+     m_oLog(StringFormat("[TCPClient][Info] Got %d addresses from getaddrinfo, starting from index %d", uSize,
+                         uStartIndex));
 
-      close(m_ConnectSocket);
+   struct addrinfo* pResPtr = m_pResultAddrInfo;
+   for (size_t uIndex = 0; uIndex < uStartIndex; ++uIndex) 
+   {
+     pResPtr = pResPtr->ai_next;
+   }
+
+   for (size_t uIndex = 0; uIndex < uSize; ++uIndex) 
+   {
+     // create socket
+     m_ConnectSocket = socket(pResPtr->ai_family, pResPtr->ai_socktype, pResPtr->ai_protocol);
+     if (m_ConnectSocket < 0)  // or == -1
+       continue;
+
+     // connexion to the server
+     int iConRet = connect(m_ConnectSocket, pResPtr->ai_addr, pResPtr->ai_addrlen);
+     if (iConRet >= 0)  // or != -1
+     {
+       /* Success */
+       m_eStatus = CONNECTED;
+
+       if (m_pResultAddrInfo != nullptr) {
+         freeaddrinfo(m_pResultAddrInfo);
+         m_pResultAddrInfo = nullptr;
+       }
+
+       return true;
+     }
+
+     if (pResPtr->ai_next == nullptr) 
+     {
+         pResPtr = m_pResultAddrInfo;
+     }
+
+     close(m_ConnectSocket);
    }
 
    if (m_pResultAddrInfo != nullptr)
