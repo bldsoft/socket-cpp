@@ -5,7 +5,6 @@
 */
 
 #include "TCPClient.h"
-#include <random>
 
 CTCPClient::CTCPClient(const LogFnCallback oLogger, const SettingsFlag eSettings /*= ALL_FLAGS*/)
     : ASocket(oLogger, eSettings),
@@ -248,7 +247,10 @@ bool CTCPClient::Connect(const std::string& strServer, const std::string& strPor
    }
 
    std::uniform_int_distribution<size_t> RngGen(0, uSize - 1);
-   size_t uStartIndex = RngGen(m_Rng);
+   size_t uStartIndex = 0;
+   if (uSize > 0) {
+     uStartIndex = RngGen(m_Rng);
+   }
 
    if (m_eSettingsFlags & ENABLE_LOG)
      m_oLog(StringFormat("[TCPClient][Info] Got %d addresses from getaddrinfo, starting from index %d", uSize,
