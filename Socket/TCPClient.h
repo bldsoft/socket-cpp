@@ -10,6 +10,7 @@
 #define INCLUDE_TCPCLIENT_H_
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef> // size_t
 #include <cstdlib>
 #include <cstring> // strerror, strlen, memcpy, strcpy

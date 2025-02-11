@@ -323,15 +323,22 @@ bool CTCPClient::Connect(const std::string& strServer, const std::string& strPor
          continue;
 
       // connexion to the server
+      const auto ConnectionTimeBegin = std::chrono::steady_clock::now();
       int iConRet = connect(m_ConnectSocket, pResPtr->ai_addr, pResPtr->ai_addrlen);
+      const auto ConnectionTimeEnd = std::chrono::steady_clock::now();
       if (iConRet >= 0) // or != -1
       {
          /* Success */
          m_eStatus = CONNECTED;
 
          if (m_eSettingsFlags & ENABLE_LOG)
-            m_oLog(StringFormat("[TCPClient][Info] Successfully connected to address %s at index %d",
-                                SockAddrToString(pResPtr->ai_addr).data(), uTmpIndex));
+         {
+            const auto TimeElapsed =
+                std::chrono::duration_cast<std::chrono::milliseconds>(ConnectionTimeEnd - ConnectionTimeBegin).count();
+            m_oLog(StringFormat(
+                "[TCPClient][Info] Successfully connected to address %s at index %d. Connection took %d ms",
+                SockAddrToString(pResPtr->ai_addr).data(), uTmpIndex, TimeElapsed));
+         }
 
          if (m_pResultAddrInfo != nullptr)
          {
