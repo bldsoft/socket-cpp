@@ -9,15 +9,16 @@
 #ifndef INCLUDE_TCPCLIENT_H_
 #define INCLUDE_TCPCLIENT_H_
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <algorithm>
-#include <cstddef>  // size_t
+#include <cstddef> // size_t
 #include <cstdlib>
-#include <cstring>  // strerror, strlen, memcpy, strcpy
+#include <cstring> // strerror, strlen, memcpy, strcpy
 #include <ctime>
 #include <iostream>
 #include <random>
+#include <sstream>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string>
 #include <vector>
 

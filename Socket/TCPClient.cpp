@@ -6,6 +6,47 @@
 
 #include "TCPClient.h"
 
+namespace
+{
+
+std::string SockAddrToString(struct sockaddr *pAddr)
+{
+   if (pAddr == nullptr)
+   {
+      return {};
+   }
+
+   static char s[INET6_ADDRSTRLEN > INET_ADDRSTRLEN ? INET6_ADDRSTRLEN : INET_ADDRSTRLEN] = "\0";
+
+   std::string strOut;
+   switch (pAddr->sa_family)
+   {
+   case AF_INET: {
+      struct sockaddr_in *pAddrIn = (struct sockaddr_in *)pAddr;
+
+      inet_ntop(AF_INET, &(pAddrIn->sin_addr), s, INET_ADDRSTRLEN);
+      strOut += s;
+      strOut += ':';
+      strOut += std::to_string(ntohs(pAddrIn->sin_port));
+      break;
+   }
+   case AF_INET6: {
+      struct sockaddr_in6 *pAddrIn6 = (struct sockaddr_in6 *)pAddr;
+
+      inet_ntop(AF_INET6, &(pAddrIn6->sin6_addr), s, INET6_ADDRSTRLEN);
+      strOut += s;
+      strOut += ':';
+      strOut += std::to_string(ntohs(pAddrIn6->sin6_port));
+      break;
+   }
+   default:
+      return {};
+   }
+   return strOut;
+}
+
+} // namespace
+
 CTCPClient::CTCPClient(const LogFnCallback oLogger, const SettingsFlag eSettings /*= ALL_FLAGS*/)
     : ASocket(oLogger, eSettings),
       m_eStatus(DISCONNECTED),
@@ -239,57 +280,83 @@ bool CTCPClient::Connect(const std::string& strServer, const std::string& strPor
     * If socket(2) (or connect(2)) fails, we (close the socket
     * and) try the next address. */
 
-   struct addrinfo* pTmpPtr = m_pResultAddrInfo;
+   std::ostringstream strAddrList;
+   size_t uTmpIndex = 0;
    size_t uSize = 0;
-   for (pTmpPtr = m_pResultAddrInfo; pTmpPtr != nullptr; pTmpPtr = pTmpPtr->ai_next) 
+   struct addrinfo *pTmpPtr = m_pResultAddrInfo;
+   for (pTmpPtr = m_pResultAddrInfo; pTmpPtr != nullptr; pTmpPtr = pTmpPtr->ai_next, ++uTmpIndex)
    {
-     ++uSize;
+      ++uSize;
+      if (uTmpIndex != 0)
+      {
+         strAddrList << ", ";
+      }
+      strAddrList << StringFormat("[%d] = '%s'", uTmpIndex, SockAddrToString(pTmpPtr->ai_addr).data());
    }
 
    std::uniform_int_distribution<size_t> RngGen(0, uSize - 1);
    size_t uStartIndex = 0;
-   if (uSize > 0) {
-     uStartIndex = RngGen(m_Rng);
+   if (uSize > 0)
+   {
+      uStartIndex = RngGen(m_Rng);
    }
 
    if (m_eSettingsFlags & ENABLE_LOG)
-     m_oLog(StringFormat("[TCPClient][Info] Got %d addresses from getaddrinfo, starting from index %d", uSize,
-                         uStartIndex));
-
-   struct addrinfo* pResPtr = m_pResultAddrInfo;
-   for (size_t uIndex = 0; uIndex < uStartIndex; ++uIndex) 
    {
-     pResPtr = pResPtr->ai_next;
+      m_oLog(StringFormat("[TCPClient][Info] Got %d address%s from getaddrinfo, starting from index %d", uSize,
+                          uSize > 1 ? "es" : "", uStartIndex));
+      m_oLog(StringFormat("[TCPClient][Info] Address list: { %s }", strAddrList.str().data()));
    }
 
-   for (size_t uIndex = 0; uIndex < uSize; ++uIndex) 
+   struct addrinfo *pResPtr = m_pResultAddrInfo;
+   for (size_t uIndex = 0; uIndex < uStartIndex; ++uIndex)
    {
-     // create socket
-     m_ConnectSocket = socket(pResPtr->ai_family, pResPtr->ai_socktype, pResPtr->ai_protocol);
-     if (m_ConnectSocket < 0)  // or == -1
-       continue;
+      pResPtr = pResPtr->ai_next;
+   }
 
-     // connexion to the server
-     int iConRet = connect(m_ConnectSocket, pResPtr->ai_addr, pResPtr->ai_addrlen);
-     if (iConRet >= 0)  // or != -1
-     {
-       /* Success */
-       m_eStatus = CONNECTED;
+   uTmpIndex = uStartIndex;
+   for (size_t uIndex = 0; uIndex < uSize; ++uIndex, ++uTmpIndex)
+   {
+      // create socket
+      m_ConnectSocket = socket(pResPtr->ai_family, pResPtr->ai_socktype, pResPtr->ai_protocol);
+      if (m_ConnectSocket < 0) // or == -1
+         continue;
 
-       if (m_pResultAddrInfo != nullptr) {
-         freeaddrinfo(m_pResultAddrInfo);
-         m_pResultAddrInfo = nullptr;
-       }
+      // connexion to the server
+      int iConRet = connect(m_ConnectSocket, pResPtr->ai_addr, pResPtr->ai_addrlen);
+      if (iConRet >= 0) // or != -1
+      {
+         /* Success */
+         m_eStatus = CONNECTED;
 
-       return true;
-     }
+         if (m_eSettingsFlags & ENABLE_LOG)
+            m_oLog(StringFormat("[TCPClient][Info] Successfully connected to address %s at index %d",
+                                SockAddrToString(pResPtr->ai_addr).data(), uTmpIndex));
 
-     if (pResPtr->ai_next == nullptr) 
-     {
+         if (m_pResultAddrInfo != nullptr)
+         {
+            freeaddrinfo(m_pResultAddrInfo);
+            m_pResultAddrInfo = nullptr;
+         }
+
+         return true;
+      }
+
+      if (m_eSettingsFlags & ENABLE_LOG)
+         m_oLog(StringFormat("[TCPClient][Info] Connection to address %s at index %d failed",
+                             SockAddrToString(pResPtr->ai_addr).data(), uTmpIndex));
+
+      if (pResPtr->ai_next == nullptr)
+      {
+         uTmpIndex = 0;
          pResPtr = m_pResultAddrInfo;
-     }
+      }
+      else
+      {
+         pResPtr = pResPtr->ai_next;
+      }
 
-     close(m_ConnectSocket);
+      close(m_ConnectSocket);
    }
 
    if (m_pResultAddrInfo != nullptr)
@@ -302,7 +369,7 @@ bool CTCPClient::Connect(const std::string& strServer, const std::string& strPor
    if (m_eSettingsFlags & ENABLE_LOG)
       m_oLog("[TCPClient][Error] no such host.");
 
-   #endif
+#endif
 
    return false;
 }
