@@ -319,34 +319,37 @@ bool CTCPClient::Connect(const std::string& strServer, const std::string& strPor
    {
       // create socket
       m_ConnectSocket = socket(pResPtr->ai_family, pResPtr->ai_socktype, pResPtr->ai_protocol);
-      if (m_ConnectSocket < 0) // or == -1
-         continue;
-
-      // connexion to the server
-      const auto ConnectionTimeBegin = std::chrono::steady_clock::now();
-      int iConRet = connect(m_ConnectSocket, pResPtr->ai_addr, pResPtr->ai_addrlen);
-      const auto ConnectionTimeEnd = std::chrono::steady_clock::now();
-      if (iConRet >= 0) // or != -1
+      if (m_ConnectSocket >= 0)
       {
-         /* Success */
-         m_eStatus = CONNECTED;
-
-         if (m_eSettingsFlags & ENABLE_LOG)
+         // connexion to the server
+         const auto ConnectionTimeBegin = std::chrono::steady_clock::now();
+         int iConRet = connect(m_ConnectSocket, pResPtr->ai_addr, pResPtr->ai_addrlen);
+         const auto ConnectionTimeEnd = std::chrono::steady_clock::now();
+         if (iConRet >= 0) // or != -1
          {
-            const auto TimeElapsed =
-                std::chrono::duration_cast<std::chrono::milliseconds>(ConnectionTimeEnd - ConnectionTimeBegin).count();
-            m_oLog(StringFormat(
-                "[TCPClient][Info] Successfully connected to address %s at index %d. Connection took %d ms",
-                SockAddrToString(pResPtr->ai_addr).data(), uTmpIndex, TimeElapsed));
-         }
+            /* Success */
+            m_eStatus = CONNECTED;
 
-         if (m_pResultAddrInfo != nullptr)
-         {
-            freeaddrinfo(m_pResultAddrInfo);
-            m_pResultAddrInfo = nullptr;
-         }
+            m_strLastAddress = SockAddrToString(pResPtr->ai_addr);
+            if (m_eSettingsFlags & ENABLE_LOG)
+            {
+               const auto TimeElapsed =
+                   std::chrono::duration_cast<std::chrono::milliseconds>(ConnectionTimeEnd - ConnectionTimeBegin)
+                       .count();
 
-         return true;
+               m_oLog(StringFormat(
+                   "[TCPClient][Info] Successfully connected to address %s at index %d. Connection took %d ms",
+                   m_strLastAddress.data(), uTmpIndex, TimeElapsed));
+            }
+
+            if (m_pResultAddrInfo != nullptr)
+            {
+               freeaddrinfo(m_pResultAddrInfo);
+               m_pResultAddrInfo = nullptr;
+            }
+
+            return true;
+         }
       }
 
       if (m_eSettingsFlags & ENABLE_LOG)

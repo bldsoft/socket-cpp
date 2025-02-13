@@ -71,6 +71,8 @@ public:
 
    Socket GetSocketDescriptor() const { return m_ConnectSocket; }
 
+   std::string GetLastAddress() const { return m_strLastAddress; }
+
 protected:
    enum SocketStatus
    {
@@ -87,6 +89,7 @@ protected:
    struct addrinfo  m_HintsAddrInfo;
    std::random_device m_RandDevice{};
    std::default_random_engine m_Rng;
+   std::string m_strLastAddress;
 };
 
 #endif
